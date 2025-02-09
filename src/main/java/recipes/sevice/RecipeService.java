@@ -1,18 +1,21 @@
 package recipes.sevice;
 
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
-import recipes.Recipes;
 import recipes.Exception.DbException;
-import recipes.Exception.Dbexception;
+import recipes.Recipes;
 import recipes.dao.RecipesDao;
-import recipes.entity.recipe;
+import recipes.entity.Category;
+import recipes.entity.Ingerdient;
+import recipes.entity.Step;
+import recipes.entity.Unit;
+import recipes.entity.Recipe;
 
 public class RecipeService {
 	private static final String SCHEMA_FILE = "recipe.schema.sql";
@@ -20,10 +23,9 @@ public class RecipeService {
 
 	private RecipesDao recipeDao = new RecipesDao();
 
-	public recipe fetchRecipeById(Integer recipeId) {
+	public Recipe fetchRecipeById(Integer recipeId) {
 		return recipeDao.fetchRecipeById(recipeId)
-				.orElseThrow(() -> new NoSuchElementException(
-						"Recipe with ID=" + recipeId + "does not exist."));
+				.orElseThrow(() -> new NoSuchElementException("Recipe with ID=" + recipeId + "does not exist."));
 	}
 
 	public void createAndPopulateTables() {
@@ -107,13 +109,55 @@ public class RecipeService {
 		new RecipeService().createAndPopulateTables();
 	}
 
-	public static recipe addRecipe(recipe recipe) {
-		return RecipesDao.insertrecipe(recipe);
+	public Recipe addRecipe(Recipe recipe) {
+		return recipeDao.insertrecipe(recipe); 
 
 	}
 
-	public List<recipe> fetchRecipes() {
-		return recipeDao.fetchAllRecipes();
+	public List<Recipe> fetchRecipes() {
+		//@formatter:off
+		return recipeDao.fetchAllRecipes()
+				.stream()
+				.sorted((r1, r2) -> r1.getRecipeId() - r2.getRecipeId())
+				.collect(Collectors.toList());
+		//@formatter:on
+	}
+
+	public List<Unit> fetchUnits() {
+		return recipeDao.fetchAllUnits();
+	}
+
+	public void addIngerdient(Ingerdient ingerdient) {
+		recipeDao.addIngerdientToRecipe(ingerdient);
+	}
+
+	public void addStep(Step step) {
+		recipeDao.addStepToRecipe(step);
+	}
+
+	public List<Category> fetchCategories() {
+		return recipeDao.fetchAllCategories(); 
+	}
+
+	public void addCategoryToRecipe(Integer recipeId, String category) {
+		recipeDao.addCategoryToRecipe(recipeId, category);
+	}
+
+	public List<Step> fetchSteps(Integer recipeId) {
+		return recipeDao.fetchRecipeSteps(recipeId);
+	}
+
+	public void modifyStep(Step step) {
+		if(!recipeDao.modifyRecipeStep(step)) {
+			throw new DbException("Step with ID=" 
+		+ step.getStepId() + " does not exist.");
+		}
+	}
+
+	public void deleteRecipe(Integer recipeId) {
+		if(!recipeDao.deleteRecipe(recipeId)) {
+			throw new DbException("Recipe with ID=" + recipeId + " does not exist");
+		}
 	}
 
 }

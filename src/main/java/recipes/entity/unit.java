@@ -1,6 +1,6 @@
 package recipes.entity;
 
-public class unit {
+public class Unit { 
 	private Integer unitId;
 	private String unitNameSingular;
 	private String unitNamePlural;

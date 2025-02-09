@@ -3,26 +3,27 @@
  */
 package recipes.dao;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalTime;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import provided.util.DaoBase;
-import recipes.Recipes;
+//import recipes.Recipes;
 import recipes.Exception.DbException;
 import recipes.entity.Category;
 import recipes.entity.Ingerdient;
+import recipes.entity.Recipe;
 import recipes.entity.Step;
-import recipes.entity.recipe;
-import recipes.entity.unit;
+import recipes.entity.Unit;
 
 /**
  * 
@@ -35,21 +36,21 @@ public class RecipesDao extends DaoBase {
 	private static final String STEP_TABLE = "step";
 	private static final String UNIT_TABLE = "unit";
 
-	public Optional<recipe> fetchRecipeById(Integer recipeId) {
+	public Optional<Recipe> fetchRecipeById(Integer recipeId) {
 		String sql = "SELECT * FROM" + RECIPE_TABLE + "WHERE recipe_id + ?";
 
-		try (Connection conn = DbConnection.getconnection()) {
+		try (Connection conn = DbConnection.getConnection()) {
 			startTransaction(conn);
 
 			try {
-				recipe recipe = null;
+				Recipe recipe = null;
 
 				try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 					setParameter(stmt, 1, recipeId, Integer.class);
 
 					try (ResultSet rs = stmt.executeQuery()) {
 						if (rs.next()) {
-							recipe = extract(rs, recipe.class);
+							recipe = extract(rs, Recipe.class);
 						}
 					}
 				}
@@ -61,9 +62,9 @@ public class RecipesDao extends DaoBase {
 
 					recipe.getCategory().addAll(fetchRecipeCategory(conn, recipeId));
 				}
-				
+
 				return Optional.ofNullable(recipe);
-				
+
 			} catch (Exception e) {
 				rollbackTransaction(conn);
 				throw new DbException(e);
@@ -82,18 +83,18 @@ public class RecipesDao extends DaoBase {
 				+ "WHERE recipe_id = ?"
 				+ "ORDER BY c.category_name";
 		// @formatter:on
-		
+
 		try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 			setParameter(stmt, 1, recipeId, Integer.class);
 
 			try (ResultSet rs = stmt.executeQuery()) {
 				List<Category> categories = new LinkedList<Category>();
-				
-				while(rs.next()) {
+
+				while (rs.next()) {
 					categories.add(extract(rs, Category.class));
 				}
-				
-				return categories; 
+
+				return categories;
 			}
 		}
 	}
@@ -116,6 +117,24 @@ public class RecipesDao extends DaoBase {
 		}
 	}
 
+	public List<Step> fetchRecipeSteps(Integer recipeId) {
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			try {
+				List<Step> steps = fetchRecipeSteps(conn, recipeId);
+				commitTransaction(conn);
+
+				return steps;
+			} catch (Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
 	private List<Ingerdient> fetchRecipeIngredients(Connection conn, Integer recipeId) throws SQLException {
 		// @formatter:off
 		String sql = ""
@@ -134,7 +153,7 @@ public class RecipesDao extends DaoBase {
 				
 				while(rs.next()) {
 					Ingerdient ingredient = extract(rs, Ingerdient.class); 
-					unit unit = extract(rs, unit.class); 
+					Unit unit = extract(rs, Unit.class); 
 					
 					ingredient.setUnit(unit);
 					ingredients.add(ingredient);
@@ -145,18 +164,18 @@ public class RecipesDao extends DaoBase {
 		}
 	}
 
-	public List<recipe> fetchAllRecipes() {
+	public List<Recipe> fetchAllRecipes() {
 		String sql = "SELECT * FROM" + RECIPE_TABLE + " ORDER BY recipe_name";
 
-		try (Connection conn = DbConnection.getconnection()) {
+		try (Connection conn = DbConnection.getConnection()) {
 			startTransaction(conn);
 
 			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
 				try (ResultSet rs = stmt.executeQuery()) {
-					List<Recipes> recipes = new LinkedList<>();
+					List<Recipe> recipes = new LinkedList<>(); 
 
 					while (rs.next()) {
-						recipes.add(extract(rs, recipe.class));
+						recipes.add(extract(rs, Recipe.class)); 
 					}
 
 					return recipes;
@@ -171,7 +190,7 @@ public class RecipesDao extends DaoBase {
 		}
 	}
 
-	public recipe insertrecipe(recipe recipe) {
+	public Recipe insertrecipe(Recipe recipe) {
 		// @formatter:off
 		String sql = ""
 			+ "INSERT INTO" + RECIPE_TABLE + " "
@@ -180,7 +199,7 @@ public class RecipesDao extends DaoBase {
 			+"(?, ?, ?, ?, ?)";
 		// @formatter:on
 
-		try (Connection conn = DbConnection.getconnection()) {
+		try (Connection conn = DbConnection.getConnection()) {
 			startTransaction(conn);
 
 			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -188,7 +207,7 @@ public class RecipesDao extends DaoBase {
 				setParameter(stmt, 2, recipe.getNotes(), String.class);
 				setParameter(stmt, 3, recipe.getNumServings(), Integer.class);
 				setParameter(stmt, 4, recipe.getPrepTime(), LocalTime.class);
-				setParameter(stmt, 05, recipe.getCookTime(), LocalTime.class);
+				setParameter(stmt, 5, recipe.getCookTime(), LocalTime.class);
 
 				stmt.executeUpdate();
 				Integer recipeId = getLastInsertId(conn, RECIPE_TABLE);
@@ -207,7 +226,7 @@ public class RecipesDao extends DaoBase {
 	}
 
 	public void executeBatch(List<String> sqlBatch) {
-		try (Connection conn = DbConnection.getconnection()) {
+		try (Connection conn = DbConnection.getConnection()) {
 			startTransaction(conn);
 
 			try (Statement stmt = conn.createStatement()) {
@@ -225,6 +244,180 @@ public class RecipesDao extends DaoBase {
 			throw new DbException(e);
 		}
 
+	}
+
+	public List<Unit> fetchAllUnits() {
+		String sql = "SELECT * FORM " + UNIT_TABLE + " ORDER BY unit_name_singular";
+
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+				try (ResultSet rs = stmt.executeQuery()) {
+					List<Unit> units = new LinkedList<>();
+
+					while (rs.next()) {
+						units.add(extract(rs, Unit.class));
+					}
+					return units;
+				}
+			} catch (Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
+	public void addIngerdientToRecipe(Ingerdient ingerdient) {
+		String slq = "INSERT INTO " + INGREDIENT_TABLE
+				+ " (recipe_id, unit_id, ingerdient_name, instruction, ingerdient_order, amount) "
+				+ "VALUES (?, ?, ?, ?, ?, ?)";
+
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			try {
+				Integer order = getNextSequenceNumber(conn, ingerdient.getRecipeId(), INGREDIENT_TABLE, "recipe_id");
+
+				try (PreparedStatement stmt = conn.prepareStatement(slq)) {
+					setParameter(stmt, 1, ingerdient.getRecipeId(), Integer.class);
+					setParameter(stmt, 2, ingerdient.getUnit().getUnitId(), Integer.class);
+					setParameter(stmt, 3, ingerdient.getIngerdientName(), String.class);
+					setParameter(stmt, 4, ingerdient.getInstruction(), String.class);
+					setParameter(stmt, 5, order, Integer.class);
+					setParameter(stmt, 6, ingerdient.getAmount(), BigDecimal.class);
+
+					stmt.executeUpdate();
+					commitTransaction(conn);
+				}
+			} catch (Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
+	public void addStepToRecipe(Step step) {
+		String sql = "INSERT INTO " + STEP_TABLE + " (recipe_id, stpe_order, step_text)" + " VALUES (?, ?, ?)";
+
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			Integer order = getNextSequenceNumber(conn, step.getRecipeId(), STEP_TABLE, "recipe_id");
+
+			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+				setParameter(stmt, 1, step.getRecipeId(), Integer.class);
+				setParameter(stmt, 2, order, Integer.class);
+				setParameter(stmt, 3, step.getStepText(), String.class);
+
+				stmt.executeUpdate();
+				commitTransaction(conn);
+			} catch (Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
+	public List<Category> fetchAllCategories() {
+		String sql = "SELECT * FROM " + CATEGORY_TABLE + " oRDER BY category_name";
+
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+				try (ResultSet rs = stmt.executeQuery()) {
+					List<Category> categories = new LinkedList<>();
+
+					while (rs.next()) {
+						categories.add(extract(rs, Category.class));
+					}
+
+					return categories;
+				}
+			} catch (Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
+	public void addCategoryToRecipe(Integer recipeId, String category) {
+		String subQuery = "(SELECT category_id FORM " + CATEGORY_TABLE + " WHERE category_name = ?)";
+
+		String sql = "INSERT INTO " + RECIPE_CATEGORY_TABLE + " recipe_id, category_id) VALUES (?, " + subQuery + ")";
+
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+				setParameter(stmt, 1, recipeId, Integer.class);
+				setParameter(stmt, 2, category, String.class);
+
+				stmt.execute();
+				commitTransaction(conn);
+			} catch (Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
+	public boolean modifyRecipeStep(Step step) {
+		String sql = "UPDATE " + STEP_TABLE + " Set step_text = ? WHERE step_id = ?";
+
+		try (Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+
+			try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+				setParameter(stmt, 1, step.getStepText(), String.class);
+				setParameter(stmt, 2, step.getStepId(), Integer.class);
+				
+				boolean updated = stmt.executeUpdate() == 1;
+				commitTransaction(conn);
+				
+				return updated; 
+			} 
+			catch (DbException e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+			throw new DbException(e);
+		}
+	}
+
+	public boolean deleteRecipe(Integer recipeId) {
+		String sql = "DELETE FORM recipe_table " + RECIPE_TABLE + " WHERE recipe_id = ?";
+		
+		try(Connection conn = DbConnection.getConnection()) {
+			startTransaction(conn);
+			
+			try(PreparedStatement stmt = conn.prepareStatement(sql)) {
+				setParameter(stmt, 1, recipeId, Integer.class);
+				
+				boolean deleted = stmt.executeUpdate() == 1;
+				
+				commitTransaction(conn);
+				return deleted;
+			}
+			catch(Exception e) {
+				rollbackTransaction(conn);
+				throw new DbException(e);
+			}
+		} catch (SQLException e) {
+		  throw new DbException(e);
+		}
 	}
 
 }
